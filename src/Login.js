@@ -6,28 +6,54 @@ import {
   TouchableOpacity,
   ImageBackground,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import Input from "./components/Input";
 import CustomButton from "./components/Buttons";
 import HeaderWithIcon from "./components/HeaderWithIcon";
 import Icon from "./components/Icon";
+import { AuthService } from "./route/apiService";
 
-// Importe sua imagem (ajuste o caminho conforme necessário)
 const backgroundImage = require("../assets/images/login-bg.jpg");
 
 const Login = ({ navigation }) => {
-  // Receba a prop navigation
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    if (email && password) {
-      Alert.alert("Sucesso", "Login realizado com sucesso");
-      navigation.navigate("StatusChamado"); // Navega para a tela de Status
-    } else {
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
       Alert.alert("Erro", "Por favor, preencha todos os campos");
+      return;
     }
+
+    if (!validateEmail(email)) {
+      Alert.alert("Erro", "Por favor, insira um e-mail válido");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await AuthService.login(email, password);
+      setUserName(response.user_name); // Atualiza o estado com o nome do usuário
+
+      Alert.alert(
+        "Bem-vindo!",
+        `Olá, ${response.user_name}! Seu login foi realizado com sucesso.`
+      );
+      navigation.navigate("StatusChamado");
+    } catch (error) {
+      Alert.alert("Erro", error.message || "Ocorreu um erro durante o login");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validateEmail = (email) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
   };
 
   return (
@@ -38,7 +64,7 @@ const Login = ({ navigation }) => {
     >
       <View style={styles.overlay}>
         <HeaderWithIcon
-          iconName="notifications-active" // Ícone de sirene
+          iconName="notifications-active"
           imageSource={require("../assets/images/logo.png")}
         />
 
@@ -53,6 +79,7 @@ const Login = ({ navigation }) => {
             iconName="email"
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
           />
 
           <Input
@@ -75,12 +102,27 @@ const Login = ({ navigation }) => {
             }
           />
 
-          <CustomButton
-            title="Entrar"
-            onPress={handleLogin}
-            iconName="login"
-            style={styles.loginButton}
-          />
+          {loading ? (
+            <ActivityIndicator
+              size="large"
+              color="#0066cc"
+              style={styles.loading}
+            />
+          ) : (
+            <CustomButton
+              title="Entrar"
+              onPress={handleLogin}
+              iconName="login"
+              style={styles.loginButton}
+            />
+          )}
+
+          <TouchableOpacity
+            style={styles.forgotPassword}
+            onPress={() => navigation.navigate("ForgotPassword")}
+          >
+            <Text style={styles.forgotPasswordText}>Esqueceu sua senha?</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </ImageBackground>
@@ -120,6 +162,18 @@ const styles = StyleSheet.create({
   loginButton: {
     marginTop: 30,
     width: "100%",
+    backgroundColor: "#0066cc",
+  },
+  loading: {
+    marginTop: 30,
+  },
+  forgotPassword: {
+    marginTop: 15,
+    alignSelf: "flex-end",
+  },
+  forgotPasswordText: {
+    color: "#0066cc",
+    fontSize: 14,
   },
 });
 

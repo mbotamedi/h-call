@@ -68,7 +68,7 @@ const TelaPerfil = ({ navigation }) => {
           <View style={styles.avatarContainer}>
             <Image source={{ uri: user.avatar }} style={styles.avatar} />
             <TouchableOpacity style={styles.editAvatarButton}>
-              <MaterialIcons name="edit" size={18} color="#6200EE" />
+              {/*<MaterialIcons name="edit" size={18} color="#6200EE" />*/}
             </TouchableOpacity>
             <Text style={styles.userName}>{user.name}</Text>
             <Text style={styles.userPosition}>{user.position}</Text>
@@ -99,7 +99,7 @@ const TelaPerfil = ({ navigation }) => {
             </View>
           </View>
           {/* Informações Profissionais */}
-          <View style={styles.section}>
+          {/*} <View style={styles.section}>
             <Text style={styles.sectionTitle}>Informações Profissionais</Text>
 
             <View style={styles.infoCard}>
@@ -121,7 +121,7 @@ const TelaPerfil = ({ navigation }) => {
                 value={user.registration}
               />
             </View>
-          </View>
+          </View>*/}
           {/* Configurações e Ações */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Configurações</Text>
@@ -135,21 +135,21 @@ const TelaPerfil = ({ navigation }) => {
                 <MaterialIcons name="chevron-right" size={24} color="#999" />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.menuItem}>
+              {/*<TouchableOpacity style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
                   <MaterialCommunityIcons name="bell" size={22} color="#555" />
                   <Text style={styles.menuItemText}>Notificações</Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={24} color="#999" />
-              </TouchableOpacity>
+              </TouchableOpacity>*/}
 
-              <TouchableOpacity style={styles.menuItem}>
+              {/*<TouchableOpacity style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
                   <MaterialIcons name="help" size={22} color="#555" />
                   <Text style={styles.menuItemText}>Ajuda e Suporte</Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={24} color="#999" />
-              </TouchableOpacity>
+              </TouchableOpacity>*/}
             </View>
           </View>
 
