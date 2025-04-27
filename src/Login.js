@@ -37,11 +37,13 @@ const Login = ({ navigation }) => {
 
     try {
       const response = await AuthService.login(email, password);
-      setUserName(response.user_name); // Atualiza o estado com o nome do usuário
-
+      let name = response.user.name; // Atualiza o estado com o nome do usuário
+      /*if ((name = "")) {
+        name = "Usuario não encontra";
+      }*/
       Alert.alert(
         "Bem-vindo!",
-        `Olá, ${response.user_name}! Seu login foi realizado com sucesso.`
+        `Olá, ${name}! Seu login foi realizado com sucesso.`
       );
       navigation.navigate("StatusChamado");
     } catch (error) {
@@ -64,7 +66,7 @@ const Login = ({ navigation }) => {
     >
       <View style={styles.overlay}>
         <HeaderWithIcon
-          iconName="notifications-active"
+          //iconName="notifications-active"
           imageSource={require("../assets/images/logo.png")}
         />
 
@@ -102,27 +104,29 @@ const Login = ({ navigation }) => {
             }
           />
 
-          {loading ? (
-            <ActivityIndicator
-              size="large"
-              color="#0066cc"
-              style={styles.loading}
-            />
-          ) : (
-            <CustomButton
-              title="Entrar"
-              onPress={handleLogin}
-              iconName="login"
-              style={styles.loginButton}
-            />
-          )}
+          <View style={styles.buttonContainer}>
+            {loading ? (
+              <ActivityIndicator
+                size="large"
+                color="#0066cc"
+                style={styles.loading}
+              />
+            ) : (
+              <CustomButton
+                title="Entrar"
+                onPress={handleLogin}
+                iconName="login"
+                style={styles.loginButton}
+              />
+            )}
+          </View>
 
-          <TouchableOpacity
+          {/*<TouchableOpacity
             style={styles.forgotPassword}
             onPress={() => navigation.navigate("ForgotPassword")}
           >
             <Text style={styles.forgotPasswordText}>Esqueceu sua senha?</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>*/}
         </View>
       </View>
     </ImageBackground>
@@ -159,13 +163,21 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 400,
   },
+
+  buttonContainer: {
+    alignItems: "center", // Centraliza horizontalmente
+    width: "100%", // Garante que o contêiner ocupe a largura total
+    paddingHorizontal: 20, // Espaçamento lateral opcional
+  },
   loginButton: {
     marginTop: 30,
-    width: "100%",
+    width: 200, // Largura fixa para o botão (ajuste conforme necessário)
     backgroundColor: "#0066cc",
+    alignSelf: "center", // Reforça a centralização
   },
   loading: {
     marginTop: 30,
+    alignSelf: "center", // Centraliza o indicador
   },
   forgotPassword: {
     marginTop: 15,

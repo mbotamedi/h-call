@@ -10,16 +10,13 @@ import {
   TextInput,
   Image,
   ImageBackground,
-  ActivityIndicator,
-  Alert,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
-import FooterMenu from "../components/FooterMenu";
-import { TicketService } from "../route/apiService";
+//import AsyncStorage from "@react-native-async-storage/async-storage";
+import FooterMenu from "../components/FooterMenu"; // Importe o novo componente
 
 const backgroundImage = require("../../assets/images/login-bg.jpg");
 
@@ -31,7 +28,6 @@ const NovoChamado = ({ navigation }) => {
   const [descricao, setDescricao] = useState("");
   const [anexo, setAnexo] = useState(null);
   const [tipoAnexo, setTipoAnexo] = useState(null);
-  const [loading, setLoading] = useState(false);
   const equipamentos = [
     "NoteBook",
     "Desktop",
@@ -92,15 +88,14 @@ const NovoChamado = ({ navigation }) => {
           copyToCacheDirectory: true,
         });
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          setAnexo(result.assets[0].uri);
+        if (result.type === "success") {
+          setAnexo(result.uri);
           setTipoAnexo("file");
         }
       }
     } catch (error) {
       console.error("Erro ao selecionar anexo:", error);
-      Alert.alert(
-        "Erro",
+      alert(
         "Erro ao selecionar o arquivo. Por favor, selecione um tipo válido (PDF, DOC, XLS)."
       );
     }
@@ -132,66 +127,20 @@ const NovoChamado = ({ navigation }) => {
     }
   };
 
-  const convertImageToBase64 = async (uri) => {
-    try {
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      return base64;
-    } catch (error) {
-      console.error("Erro ao converter imagem para base64:", error);
-      throw new Error("Falha ao converter a imagem para base64.");
-    }
-  };
+  const enviarChamado = () => {
+    const chamadoData = {
+      requisitor,
+      equipamento,
+      departamento,
+      referencia,
+      descricao,
+      anexo,
+      tipoAnexo,
+    };
 
-  const enviarChamado = async () => {
-    if (!requisitor || !equipamento || !departamento || !descricao) {
-      Alert.alert("Erro", "Por favor, preencha todos os campos obrigatórios.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      let ticketData = {
-        ticket_name: `${equipamento} - ${referencia || "Sem referência"}`,
-        ticket_explain: `Requisitor: ${requisitor}\nDepartamento: ${departamento}\nDescrição: ${descricao}`,
-        tickes_images: [],
-      };
-
-      if (anexo && tipoAnexo === "image") {
-        const base64Image = await convertImageToBase64(anexo);
-        const fileName = anexo.split("/").pop();
-        const imageType = fileName.endsWith(".png")
-          ? "image/png"
-          : "image/jpeg";
-
-        ticketData.tickes_images = [
-          {
-            image_name: fileName,
-            image_content: base64Image,
-            image_type: imageType,
-          },
-        ];
-      } else if (anexo && tipoAnexo === "file") {
-        Alert.alert(
-          "Aviso",
-          "A API não suporta anexos de arquivos (PDF, DOC, XLS). Apenas imagens são permitidas."
-        );
-        setLoading(false);
-        return;
-      }
-
-      await TicketService.createTicket(ticketData);
-
-      Alert.alert("Sucesso", "Chamado criado com sucesso!", [
-        { text: "OK", onPress: () => navigation.goBack() },
-      ]);
-    } catch (error) {
-      console.error("Erro ao criar o ticket:", error);
-      Alert.alert("Erro", error.message || "Falha ao criar o ticket.");
-    } finally {
-      setLoading(false);
-    }
+    console.log("Dados do chamado:", chamadoData);
+    alert("Chamado enviado com sucesso!");
+    navigation.goBack();
   };
 
   return (
@@ -215,10 +164,11 @@ const NovoChamado = ({ navigation }) => {
               value={requisitor}
               onChangeText={setRequisitor}
               placeholder="Nome do requisitor"
-              editable={requisitor === ""}
+              editable={requisitor === ""} // Só permite editar se estiver vazio
               selectTextOnFocus={requisitor === ""}
             />
 
+            {/* Restante do formulário permanece igual */}
             <Text style={styles.label}>Equipamento:</Text>
             <View style={styles.pickerContainer}>
               <Picker
@@ -291,21 +241,14 @@ const NovoChamado = ({ navigation }) => {
             {renderAnexo()}
 
             <TouchableOpacity
-              style={[
-                styles.enviarButton,
-                loading && styles.enviarButtonDisabled,
-              ]}
+              style={styles.enviarButton}
               onPress={enviarChamado}
-              disabled={loading}
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.enviarText}>ENVIAR CHAMADO</Text>
-              )}
+              <Text style={styles.enviarText}>ENVIAR CHAMADO</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
+        {/* Menu inferior - agora usando o componente separado */}
         <FooterMenu navigation={navigation} />
       </SafeAreaView>
     </ImageBackground>
@@ -420,13 +363,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
-  enviarButtonDisabled: {
-    backgroundColor: "#99C9FF",
-  },
   enviarText: {
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  footer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 15,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#ddd",
+  },
+  footerButton: {
+    alignItems: "center",
   },
 });
 

@@ -33,7 +33,7 @@ const DetalhesChamados = ({ route, navigation }) => {
           id: ticketData.id.split("_")[1].slice(0, 8), // Extrai uma parte curta do ID
           title: ticketData.name || "Sem título",
           description: ticketData.explain || "Sem descrição",
-          status: ticketData.tickt_status || "Desconhecido", // Usa tickt_status
+          status: ticketData.status || "Desconhecido",
           date: new Date(ticketData.date).toLocaleString("pt-BR", {
             day: "2-digit",
             month: "2-digit",
@@ -42,15 +42,10 @@ const DetalhesChamados = ({ route, navigation }) => {
             minute: "2-digit",
           }), // Formata a data
           department: ticketData.department || "Não informado",
-          priority: "Média", // Valor padrão, já que a API não retorna priority
-          location: "Não informado", // Valor padrão, já que a API não retorna location
-          requester: ticketData.email || "Desconhecido", // Usa email como requester
-          history: ticketData.history
-            ? ticketData.history.map((item) => ({
-                date: item.date,
-                action: item.return, // Mapeia o campo "return" para "action"
-              }))
-            : [],
+          priority: ticketData.priority || "Média",
+          location: ticketData.location || "Não informado",
+          requester: ticketData.author || "Desconhecido",
+          history: ticketData.history || [],
         };
         setTicket(mappedTicket);
       } catch (err) {
@@ -189,7 +184,7 @@ const DetalhesChamados = ({ route, navigation }) => {
           </View>
 
           {/* Botão de Atualizar Status */}
-          {/*<View style={styles.buttonContainer}>
+          <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[
                 styles.actionButton,
@@ -202,7 +197,7 @@ const DetalhesChamados = ({ route, navigation }) => {
               <MaterialIcons name="edit" size={24} color="white" />
               <Text style={styles.actionButtonText}>Atualizar Status</Text>
             </TouchableOpacity>
-          </View>*/}
+          </View>
         </ScrollView>
 
         {/* Footer Menu */}

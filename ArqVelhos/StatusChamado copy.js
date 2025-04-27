@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -7,43 +7,21 @@ import {
   ImageBackground,
   TouchableOpacity,
   StatusBar,
+  ScrollView,
   SafeAreaView,
-  ActivityIndicator,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import FooterMenu from "../components/FooterMenu";
-import { TicketService } from "../route/apiService"; // Ajustado para usar o TicketService
+import FooterMenu from "../components/FooterMenu"; // Importe o novo componente
 
 const backgroundImage = require("../../assets/images/login-bg.jpg");
 
+const chamados = [
+  { id: "1", numero: "#001", descricao: "Problema com impressora" },
+  { id: "2", numero: "#002", descricao: "Acesso negado ao sistema" },
+  { id: "3", numero: "#003", descricao: "Senha expirada" },
+];
+
 const StatusChamado = ({ navigation }) => {
-  const [chamados, setChamados] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Busca os tickets da API quando o componente é montado
-  useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        setLoading(true);
-        const tickets = await TicketService.getTickets(); // Usa o TicketService
-        const mappedTickets = tickets.map((ticket) => ({
-          id: ticket.id,
-          numero: ticket.id.slice(0, 8),
-          //numero: ticket.id.split("_")[1].slice(0, 8), // Extrai uma parte do ID para exibir
-          descricao: ticket.item, // Usa o campo "name" como descrição
-        }));
-        setChamados(mappedTickets);
-      } catch (err) {
-        setError(err.message || "Erro ao carregar os tickets.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTickets();
-  }, []);
-
   const renderItem = ({ item }) => (
     <TouchableOpacity
       style={styles.row}
@@ -73,25 +51,15 @@ const StatusChamado = ({ navigation }) => {
           </Text>
         </View>
 
-        {/* Exibe indicador de carregamento ou erro */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={chamados}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-          />
-        )}
+        {/* Lista de chamados */}
+        <FlatList
+          data={chamados}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+        />
 
-        {/* Menu inferior */}
+        {/* Menu inferior - agora usando o componente separado */}
         <FooterMenu navigation={navigation} />
       </SafeAreaView>
     </ImageBackground>
@@ -170,22 +138,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 20,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  errorText: {
-    color: "#D32F2F",
-    fontSize: 16,
-    textAlign: "center",
-  },
+  // REMOVA os estilos do footer daqui, pois agora estão no componente FooterMenu
 });
 
 export default StatusChamado;
