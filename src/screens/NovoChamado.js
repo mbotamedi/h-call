@@ -72,10 +72,9 @@ const NovoChamado = ({ navigation }) => {
       try {
         const role = await AuthService.getUserRole();
         setUserRole(role);
-        AuthService.getUserData;
         const userData = await AuthService.getUserData();
         if (userData && userData.name) {
-          setRequisitor(userData.name); // Preenche o requisitor com o nome do usuário
+          setRequisitor(userData.name);
         } else {
           throw new Error("Dados do usuário não encontrados.");
         }
@@ -96,29 +95,30 @@ const NovoChamado = ({ navigation }) => {
       let result;
 
       if (tipo === "camera") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permissão negada", "Permita o acesso à câmera.");
+          return;
+        }
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
           aspect: [4, 3],
-          quality: 1,
+          quality: 0.8, // Reduzir qualidade para diminuir tamanho
         });
-
-        if (!result.canceled) {
-          setAnexo(result.assets[0].uri);
-          setTipoAnexo("image");
-        }
       } else if (tipo === "galeria") {
+        const { status } =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permissão negada", "Permita o acesso à galeria.");
+          return;
+        }
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
           aspect: [4, 3],
-          quality: 1,
+          quality: 0.8,
         });
-
-        if (!result.canceled) {
-          setAnexo(result.assets[0].uri);
-          setTipoAnexo("image");
-        }
       } else if (tipo === "arquivo") {
         result = await DocumentPicker.getDocumentAsync({
           type: [
@@ -130,17 +130,17 @@ const NovoChamado = ({ navigation }) => {
           ],
           copyToCacheDirectory: true,
         });
+      }
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          setAnexo(result.assets[0].uri);
-          setTipoAnexo("file");
-        }
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setAnexo(result.assets[0].uri);
+        setTipoAnexo(tipo === "arquivo" ? "file" : "image");
       }
     } catch (error) {
       console.error("Erro ao selecionar anexo:", error);
       Alert.alert(
         "Erro",
-        "Erro ao selecionar o arquivo. Por favor, selecione um tipo válido (PDF, DOC, XLS)."
+        "Erro ao selecionar o arquivo. Por favor, selecione um tipo válido (PDF, DOC, XLS, ou imagem)."
       );
     }
   };
@@ -182,12 +182,14 @@ const NovoChamado = ({ navigation }) => {
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      return base64;
+      const fileName = uri.split("/").pop();
+      const imageType = fileName.toLowerCase().endsWith(".png")
+        ? "image/png"
+        : "image/jpeg";
+      return `data:${imageType};base64,${base64}`; // Adiciona prefixo
     } catch (error) {
       console.error("Erro ao converter imagem para base64:", error);
-      throw new Error(
-        error.message || "Falha ao converter a imagem para base64."
-      );
+      throw new Error(error.message || "Falha ao converter a imagem.");
     }
   };
 
@@ -227,23 +229,11 @@ const NovoChamado = ({ navigation }) => {
         department: departamento,
         reference: referencia || "Sem referência",
         explain: descricao,
-        images: [],
       };
 
       if (anexo && tipoAnexo === "image") {
         const base64Image = await convertImageToBase64(anexo);
-        const fileName = anexo.split("/").pop();
-        const imageType = fileName.toLowerCase().endsWith(".png")
-          ? "image/png"
-          : "image/jpeg";
-
-        ticketData.images = [
-          {
-            image_name: fileName,
-            image_content: base64Image,
-            image_type: imageType,
-          },
-        ];
+        ticketData.image = base64Image; // Ajustado para enviar como string base64
       } else if (anexo && tipoAnexo === "file") {
         Alert.alert(
           "Aviso",
@@ -261,11 +251,15 @@ const NovoChamado = ({ navigation }) => {
       await TicketService.createTicket(ticketData);
 
       Alert.alert("Sucesso", "Chamado criado com sucesso!", [
-        { text: "OK", onPress: () => navigation.goBack() },
+        { text: "OK", onPress: () => navigation.navigate("StatusChamado") }, // Alterado para navegar para StatusChamado
       ]);
     } catch (error) {
-      console.error("Erro ao criar o ticket:", error.message);
-      Alert.alert("Erro", error.message || "Falha ao criar o ticket.");
+      console.error("Erro ao criar o ticket:", error);
+      Alert.alert(
+        "Erro",
+        error.message ||
+          "Falha ao criar o ticket. Verifique os dados e tente novamente."
+      );
     } finally {
       setLoading(false);
     }
@@ -292,8 +286,8 @@ const NovoChamado = ({ navigation }) => {
               value={requisitor}
               onChangeText={setRequisitor}
               placeholder="Nome do requisitor"
-              editable={true} // Alterado para permitir edição
-              selectTextOnFocus={true} // Alterado para permitir seleção
+              editable={true}
+              selectTextOnFocus={true}
             />
 
             <Text style={styles.label}>Equipamento:</Text>
@@ -302,6 +296,7 @@ const NovoChamado = ({ navigation }) => {
                 selectedValue={equipamento}
                 onValueChange={setEquipamento}
               >
+                <Picker.Item label="Selecione um equipamento" value="" />
                 {equipamentos.map((item, index) => (
                   <Picker.Item key={index} label={item} value={item} />
                 ))}
@@ -314,6 +309,7 @@ const NovoChamado = ({ navigation }) => {
                 selectedValue={departamento}
                 onValueChange={setDepartamento}
               >
+                <Picker.Item label="Selecione um departamento" value="" />
                 {departamentos.map((item, index) => (
                   <Picker.Item key={index} label={item} value={item} />
                 ))}
@@ -443,10 +439,6 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginBottom: 15,
     overflow: "hidden",
-  },
-  picker: {
-    height: 50,
-    width: "100%",
   },
   anexoButtonsContainer: {
     flexDirection: "row",
