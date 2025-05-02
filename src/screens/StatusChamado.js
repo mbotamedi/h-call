@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import FooterMenu from "../components/FooterMenu";
-import { TicketService } from "../route/apiService"; // Ajustado para usar o TicketService
+import { TicketService } from "../route/apiService";
 
 const backgroundImage = require("../../assets/images/login-bg.jpg");
 
@@ -21,28 +21,33 @@ const StatusChamado = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Busca os tickets da API quando o componente é montado
-  useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        setLoading(true);
-        const tickets = await TicketService.getTickets(); // Usa o TicketService
-        const mappedTickets = tickets.map((ticket) => ({
-          id: ticket.id,
-          numero: ticket.id.slice(0, 8),
-          //numero: ticket.id.split("_")[1].slice(0, 8), // Extrai uma parte do ID para exibir
-          descricao: ticket.item, // Usa o campo "name" como descrição
-        }));
-        setChamados(mappedTickets);
-      } catch (err) {
-        setError(err.message || "Erro ao carregar os tickets.");
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Função para buscar tickets
+  const fetchTickets = async () => {
+    try {
+      setLoading(true);
+      const tickets = await TicketService.getTickets();
+      const mappedTickets = tickets.map((ticket) => ({
+        id: ticket.id,
+        numero: ticket.id.slice(0, 8),
+        descricao: ticket.item,
+      }));
+      setChamados(mappedTickets);
+    } catch (err) {
+      setError(err.message || "Erro ao carregar os tickets.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchTickets();
-  }, []);
+  // Busca tickets quando a tela ganha foco
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      fetchTickets();
+    });
+
+    // Limpa o listener quando o componente é desmontado
+    return unsubscribe;
+  }, [navigation]);
 
   const renderItem = ({ item }) => (
     <TouchableOpacity

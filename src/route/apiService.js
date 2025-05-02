@@ -4,7 +4,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Configuração base do Axios
 const api = axios.create({
-  baseURL: "https://situation-songs-defend-hacker.trycloudflare.com/api",
+  baseURL:
+    "https://chronicles-midi-ceremony-expectations.trycloudflare.com/api",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -31,11 +32,14 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       await AsyncStorage.removeItem("jwt_token");
+      await AsyncStorage.removeItem("user_role");
       throw new Error("Sessão expirada. Faça login novamente.");
     }
     const message =
       error.response?.data?.message ||
-      "Falha na comunicação com o servidor. Tente novamente.";
+      `Falha na comunicação com o servidor. Tente novamente. Detalhes: ${
+        error.message || "Sem detalhes adicionais"
+      } (Status: ${error.response?.status || "N/A"})`;
     return Promise.reject(new Error(message));
   }
 );
@@ -52,12 +56,51 @@ export const AuthService = {
       const data = response.data;
       if (data.status) {
         await AsyncStorage.setItem("jwt_token", data.data.token);
+        await AsyncStorage.setItem("user_role", data.data.user.role);
+        await AsyncStorage.setItem(
+          "user_data",
+          JSON.stringify({
+            email: data.data.user.email || email,
+            name: data.data.user.name || email.split("@")[0],
+            phone: data.data.user.phone || "",
+          })
+        );
         return data.data;
       } else {
         throw new Error(data.message || "Erro ao realizar login.");
       }
     } catch (error) {
       throw new Error(error.message || "Falha na comunicação com o servidor.");
+    }
+  },
+
+  getUserProfile: async () => {
+    try {
+      const response = await api.get("/user");
+      const data = response.data;
+      console.log("Resposta do endpoint /user:", data); // Log da resposta
+      if (data) {
+        await AsyncStorage.setItem(
+          "user_data",
+          JSON.stringify({
+            email: data.email,
+            name: data.name,
+            phone: data.phone || "",
+          })
+        );
+        console.log("Dados salvos no AsyncStorage:", {
+          email: data.email,
+          name: data.name,
+          phone: data.phone || "",
+        }); // Log dos dados salvos
+        await AsyncStorage.setItem("user_role", data.role);
+        return data;
+      } else {
+        throw new Error("Falha ao buscar dados do usuário.");
+      }
+    } catch (error) {
+      console.error("Erro em getUserProfile:", error.message); // Log do erro
+      throw new Error(error.message || "Erro ao conectar com o servidor.");
     }
   },
 
@@ -69,6 +112,43 @@ export const AuthService = {
   logout: async () => {
     await AsyncStorage.removeItem("jwt_token");
     await AsyncStorage.removeItem("user_data");
+    await AsyncStorage.removeItem("user_role");
+  },
+
+  getUserRole: async () => {
+    try {
+      const role = await AsyncStorage.getItem("user_role");
+      if (!role) {
+        throw new Error("Nenhuma role encontrada. Faça login novamente.");
+      }
+      return role;
+    } catch (error) {
+      throw new Error(error.message || "Erro ao obter a role do usuário.");
+    }
+  },
+
+  getUserProfile: async () => {
+    try {
+      const response = await api.get("/user");
+      const data = response.data;
+      if (data) {
+        // Atualiza o AsyncStorage com os dados mais recentes
+        await AsyncStorage.setItem(
+          "user_data",
+          JSON.stringify({
+            email: data.email,
+            name: data.name,
+            phone: data.phone || "",
+          })
+        );
+        await AsyncStorage.setItem("user_role", data.role);
+        return data;
+      } else {
+        throw new Error("Falha ao buscar dados do usuário.");
+      }
+    } catch (error) {
+      throw new Error(error.message || "Erro ao conectar com o servidor.");
+    }
   },
 };
 
@@ -102,16 +182,17 @@ export const TicketService = {
         );
       }
     } catch (error) {
-      throw new Error(error.message || "Erro ao conectar com o servidor.");
+      console.error("Erro na requisição getTicketById:", error.message);
+      return null;
     }
   },
 
   createTicket: async (ticketData) => {
     try {
-      const response = await api.post("/ticket", ticketData);
+      const response = await api.post("/ticket/", ticketData);
       const data = response.data;
       if (data.status) {
-        return data; // Retorna a resposta da API
+        return data;
       } else {
         throw new Error(data.message || "Falha ao criar o ticket.");
       }

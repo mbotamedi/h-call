@@ -19,38 +19,77 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import FooterMenu from "../components/FooterMenu";
-import { TicketService } from "../route/apiService";
+import { TicketService, AuthService } from "../route/apiService";
 
 const backgroundImage = require("../../assets/images/login-bg.jpg");
 
 const NovoChamado = ({ navigation }) => {
   const [requisitor, setRequisitor] = useState("");
-  const [equipamento, setEquipamento] = useState("NoteBook");
-  const [departamento, setDepartamento] = useState("Diretoria");
+  const [equipamento, setEquipamento] = useState("");
+  const [departamento, setDepartamento] = useState("");
   const [referencia, setReferencia] = useState("");
   const [descricao, setDescricao] = useState("");
   const [anexo, setAnexo] = useState(null);
   const [tipoAnexo, setTipoAnexo] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+
   const equipamentos = [
     "NoteBook",
     "Desktop",
     "Impressora",
     "Telefone",
     "Projetor",
+    "TV",
+    "Camera",
     "Outros",
   ];
 
   const departamentos = [
     "Diretoria",
     "Administrativo",
-    "Financeiro",
-    "RH",
+    "Secretaria",
+    "Sala dos Professores",
     "TI",
-    "Marketing",
-    "Vendas",
-    "Operações",
+    "Lab01",
+    "Lab02",
+    "Lab03",
+    "Lab04",
+    "Lab05",
+    "Lab06",
+    "Lab07",
+    "Sala01",
+    "Sala02",
+    "Sala03",
+    "Sala04",
+    "Sala05",
+    "Sala06",
+    "Sala07",
   ];
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const role = await AuthService.getUserRole();
+        setUserRole(role);
+        AuthService.getUserData;
+        const userData = await AuthService.getUserData();
+        if (userData && userData.name) {
+          setRequisitor(userData.name); // Preenche o requisitor com o nome do usuário
+        } else {
+          throw new Error("Dados do usuário não encontrados.");
+        }
+      } catch (error) {
+        console.error("Erro ao buscar dados do usuário:", error);
+        Alert.alert(
+          "Erro",
+          "Não foi possível carregar os dados do usuário. Faça login novamente.",
+          [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+        );
+      }
+    };
+    fetchUserData();
+  }, [navigation]);
 
   const selecionarAnexo = async (tipo) => {
     try {
@@ -134,13 +173,21 @@ const NovoChamado = ({ navigation }) => {
 
   const convertImageToBase64 = async (uri) => {
     try {
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      const fileSizeMB = fileInfo.size / (1024 * 1024);
+      if (fileSizeMB > 5) {
+        throw new Error("A imagem excede o tamanho máximo de 5MB.");
+      }
+
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
       return base64;
     } catch (error) {
       console.error("Erro ao converter imagem para base64:", error);
-      throw new Error("Falha ao converter a imagem para base64.");
+      throw new Error(
+        error.message || "Falha ao converter a imagem para base64."
+      );
     }
   };
 
@@ -150,22 +197,47 @@ const NovoChamado = ({ navigation }) => {
       return;
     }
 
+    if (!userRole) {
+      Alert.alert(
+        "Erro",
+        "Permissões do usuário não carregadas. Tente novamente."
+      );
+      return;
+    }
+    if (userRole === "admin") {
+      Alert.alert(
+        "Erro",
+        "Usuários com a role 'admin' não podem criar tickets."
+      );
+      return;
+    }
+    if (userRole !== "user" && userRole !== "master") {
+      Alert.alert(
+        "Erro",
+        "Apenas usuários com role 'user' ou 'master' podem criar tickets."
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       let ticketData = {
-        ticket_name: `${equipamento} - ${referencia || "Sem referência"}`,
-        ticket_explain: `Requisitor: ${requisitor}\nDepartamento: ${departamento}\nDescrição: ${descricao}`,
-        tickes_images: [],
+        name: requisitor,
+        item: equipamento,
+        department: departamento,
+        reference: referencia || "Sem referência",
+        explain: descricao,
+        images: [],
       };
 
       if (anexo && tipoAnexo === "image") {
         const base64Image = await convertImageToBase64(anexo);
         const fileName = anexo.split("/").pop();
-        const imageType = fileName.endsWith(".png")
+        const imageType = fileName.toLowerCase().endsWith(".png")
           ? "image/png"
           : "image/jpeg";
 
-        ticketData.tickes_images = [
+        ticketData.images = [
           {
             image_name: fileName,
             image_content: base64Image,
@@ -181,13 +253,18 @@ const NovoChamado = ({ navigation }) => {
         return;
       }
 
+      console.log(
+        "Dados enviados para a API:",
+        JSON.stringify(ticketData, null, 2)
+      );
+
       await TicketService.createTicket(ticketData);
 
       Alert.alert("Sucesso", "Chamado criado com sucesso!", [
         { text: "OK", onPress: () => navigation.goBack() },
       ]);
     } catch (error) {
-      console.error("Erro ao criar o ticket:", error);
+      console.error("Erro ao criar o ticket:", error.message);
       Alert.alert("Erro", error.message || "Falha ao criar o ticket.");
     } finally {
       setLoading(false);
@@ -215,8 +292,8 @@ const NovoChamado = ({ navigation }) => {
               value={requisitor}
               onChangeText={setRequisitor}
               placeholder="Nome do requisitor"
-              editable={requisitor === ""}
-              selectTextOnFocus={requisitor === ""}
+              editable={true} // Alterado para permitir edição
+              selectTextOnFocus={true} // Alterado para permitir seleção
             />
 
             <Text style={styles.label}>Equipamento:</Text>

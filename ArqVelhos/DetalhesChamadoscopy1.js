@@ -12,58 +12,48 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import FooterMenu from "../components/FooterMenu";
-import { TicketService } from "../route/apiService";
+import { TicketService } from "../route/apiService"; // Importa o TicketService
 
 const backgroundImage = require("../../assets/images/login-bg.jpg");
 
 const DetalhesChamados = ({ route, navigation }) => {
-  const { id } = route.params;
-  const [ticket, setTicket] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { id } = route.params; // Obtém o ID do ticket passado pela navegação
+  const [ticket, setTicket] = useState(null); // Estado para armazenar os dados do ticket
+  const [loading, setLoading] = useState(true); // Estado de carregamento
+  const [error, setError] = useState(null); // Estado para erros
 
+  // Busca os detalhes do ticket da API quando a tela é carregada
   useEffect(() => {
     const fetchTicketDetails = async () => {
       try {
         setLoading(true);
-        setError(null); // Limpa o erro anterior
-        const ticketData = await TicketService.getTicketById(id);
-        console.log("Dados recebidos da API:", ticketData);
-
-        if (!ticketData) {
-          throw new Error(
-            "Nenhum dado de ticket retornado pela API. Verifique se o servidor está online."
-          );
-        }
-
+        const ticketData = await TicketService.getTicketById(id); // Busca o ticket pelo ID
+        // Mapeia os dados da API para o formato esperado pela tela
         const mappedTicket = {
-          id: ticketData.id ? ticketData.id.slice(0, 8) : "Desconhecido",
+          id: ticketData.id.split("_")[1].slice(0, 8), // Extrai uma parte curta do ID
           title: ticketData.name || "Sem título",
           description: ticketData.explain || "Sem descrição",
-          status: ticketData.tickt_status || "Desconhecido", // Ajustado para tickt_status
-          date: ticketData.date
-            ? new Date(ticketData.date).toLocaleString("pt-BR", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "Data não informada",
+          status: ticketData.tickt_status || "Desconhecido", // Usa tickt_status
+          date: new Date(ticketData.date).toLocaleString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }), // Formata a data
           department: ticketData.department || "Não informado",
-          priority: "Média",
-          location: "Não informado",
-          requester: ticketData.email || "Desconhecido", // Alterado de author para email
+          //priority: "Média", // Valor padrão, já que a API não retorna priority
+          location: "Não informado", // Valor padrão, já que a API não retorna location
+          requester: ticketData.email || "Desconhecido", // Usa email como requester
           history: ticketData.history
             ? ticketData.history.map((item) => ({
                 date: item.date,
-                action: item.return,
+                action: item.return, // Mapeia o campo "return" para "action"
               }))
             : [],
         };
         setTicket(mappedTicket);
       } catch (err) {
-        console.error("Erro ao buscar detalhes do ticket:", err.message);
         setError(err.message || "Erro ao carregar os detalhes do ticket.");
       } finally {
         setLoading(false);
@@ -75,7 +65,7 @@ const DetalhesChamados = ({ route, navigation }) => {
 
   const getStatusColor = (status) => {
     const statusColors = {
-      pending: "#FFA000",
+      pending: "#FFA000", // Ajustado para corresponder ao status "pending" da API
       "Em Andamento": "#1976D2",
       Concluído: "#388E3C",
       Cancelado: "#D32F2F",
@@ -111,22 +101,6 @@ const DetalhesChamados = ({ route, navigation }) => {
     );
   }
 
-  if (!ticket) {
-    return (
-      <ImageBackground source={backgroundImage} style={styles.backgroundImage}>
-        <SafeAreaView style={styles.safeArea}>
-          <StatusBar backgroundColor="#1976D2" barStyle="light-content" />
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>
-              Nenhum dado de ticket disponível.
-            </Text>
-          </View>
-          <FooterMenu navigation={navigation} />
-        </SafeAreaView>
-      </ImageBackground>
-    );
-  }
-
   return (
     <ImageBackground
       source={backgroundImage}
@@ -141,6 +115,7 @@ const DetalhesChamados = ({ route, navigation }) => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* ID e Status */}
           <View style={styles.idStatusContainer}>
             <Text style={styles.ticketId}>#{ticket.id}</Text>
             <View
@@ -153,6 +128,7 @@ const DetalhesChamados = ({ route, navigation }) => {
             </View>
           </View>
 
+          {/* Card de Informações Principais */}
           <View style={styles.card}>
             <Text style={styles.ticketTitle}>{ticket.title}</Text>
             <Text style={styles.ticketDescription}>{ticket.description}</Text>
@@ -187,37 +163,49 @@ const DetalhesChamados = ({ route, navigation }) => {
             </View>
           </View>
 
+          {/* Histórico de Atualizações */}
           <Text style={styles.sectionTitle}>Histórico</Text>
           <View style={styles.historyCard}>
-            {ticket.history.length > 0 ? (
-              ticket.history.map((item, index) => (
-                <View key={index} style={styles.historyItem}>
-                  <View style={styles.historyDot} />
-                  <View style={styles.historyContent}>
-                    <Text style={styles.historyDate}>
-                      {new Date(item.date).toLocaleString("pt-BR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Text>
-                    <Text style={styles.historyAction}>{item.action}</Text>
-                  </View>
-                  {index < ticket.history.length - 1 && (
-                    <View style={styles.historyLine} />
-                  )}
+            {ticket.history.map((item, index) => (
+              <View key={index} style={styles.historyItem}>
+                <View style={styles.historyDot} />
+                <View style={styles.historyContent}>
+                  <Text style={styles.historyDate}>
+                    {new Date(item.date).toLocaleString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+                  <Text style={styles.historyAction}>{item.action}</Text>
                 </View>
-              ))
-            ) : (
-              <Text style={styles.historyAction}>
-                Nenhum histórico disponível.
-              </Text>
-            )}
+                {index < ticket.history.length - 1 && (
+                  <View style={styles.historyLine} />
+                )}
+              </View>
+            ))}
           </View>
+
+          {/* Botão de Atualizar Status */}
+          {/*<View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: getStatusColor(ticket.status) },
+              ]}
+              onPress={() =>
+                navigation.navigate("UpdateStatus", { ticketId: ticket.id })
+              }
+            >
+              <MaterialIcons name="edit" size={24} color="white" />
+              <Text style={styles.actionButtonText}>Atualizar Status</Text>
+            </TouchableOpacity>
+          </View>*/}
         </ScrollView>
 
+        {/* Footer Menu */}
         <FooterMenu navigation={navigation} />
       </SafeAreaView>
     </ImageBackground>
@@ -343,6 +331,29 @@ const styles = StyleSheet.create({
   historyAction: {
     fontSize: 15,
     color: "#333",
+  },
+  buttonContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    marginBottom: 20,
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 28,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  actionButtonText: {
+    color: "white",
+    fontWeight: "bold",
+    marginLeft: 8,
+    fontSize: 16,
   },
   loadingContainer: {
     flex: 1,

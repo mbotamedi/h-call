@@ -36,28 +36,18 @@ const Login = ({ navigation }) => {
     setLoading(true);
 
     try {
-      await AuthService.login(email, password);
-      const userData = await AuthService.getUserData();
-      if (!userData || !userData.name) {
-        throw new Error("Dados do usuário não encontrados.");
-      }
-      Alert.alert("Bem-vindo!", `Olá, ${userData.name}! Seu login foi realizado com sucesso.`);
+      const response = await AuthService.login(email, password);
+      let name = response.user.name; // Atualiza o estado com o nome do usuário
+      /*if ((name = "")) {
+        name = "Usuario não encontra";
+      }*/
+      Alert.alert(
+        "Bem-vindo!",
+        `Olá, ${name}! Seu login foi realizado com sucesso.`
+      );
       navigation.navigate("StatusChamado");
     } catch (error) {
-      console.error("Erro no login:", error);
-      let errorMessage = error.message || "Ocorreu um erro durante o login.";
-      if (error.code === "ERR_NETWORK") {
-        errorMessage = "Sem conexão com a internet. Verifique sua rede.";
-      }
-      Alert.alert("Erro", errorMessage, [
-        {
-          text: "OK",
-          onPress: () => {
-            setEmail("");
-            setPassword("");
-          },
-        },
-      ]);
+      Alert.alert("Erro", error.message || "Ocorreu um erro durante o login");
     } finally {
       setLoading(false);
     }

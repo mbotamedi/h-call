@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,29 +10,116 @@ import {
   StatusBar,
   SafeAreaView,
   TextInput,
+  Alert,
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import LogoutButton from "../components/LogoutButtons";
 import CustomModal from "../components/CustomModal";
+import { AuthService } from "../route/apiService";
 
-// Importe sua imagem (ajuste o caminho conforme necessário)
-const backgroundImage = require("../../assets/images/login-bg.jpg"); // Caminho para sua imagem
+const backgroundImage = require("../../assets/images/login-bg.jpg");
+const DEFAULT_AVATAR = require("../../assets/images/avatar.png");
 
 const TelaPerfil = ({ navigation }) => {
-  // Dados do usuário (poderiam vir de uma API)
   const [user, setUser] = useState({
-    name: "João Silva",
-    email: "joao.silva@empresa.com",
-    position: "Técnico de Suporte",
-    department: "TI",
-    registration: "12345",
-    phone: "(11) 98765-4321",
-    avatar: "https://randomuser.me/api/portraits/men/1.jpg",
+    name: "",
+    email: "",
+    phone: "",
+    avatar: null,
   });
-
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // Carregar dados do usuário e avatar do AsyncStorage
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const userData = await AuthService.getUserProfile();
+        console.log("teste user darta", userData);
+        const avatarKey = `avatar_${userData.email.replace(/[@.]/g, "_")}`;
+        const savedAvatar = await AsyncStorage.getItem(avatarKey);
+        setUser({
+          name: userData.name || userData.email?.split("@")[0] || "Usuário",
+          email: userData.email || "",
+          phone: userData.phone || "",
+          avatar: savedAvatar || null,
+        });
+      } catch (error) {
+        try {
+          const storedUserData = await AuthService.getUserData();
+          if (storedUserData) {
+            const avatarKey = `avatar_${storedUserData.email.replace(
+              /[@.]/g,
+              "_"
+            )}`;
+            const savedAvatar = await AsyncStorage.getItem(avatarKey);
+            setUser({
+              name:
+                storedUserData.name ||
+                storedUserData.email?.split("@")[0] ||
+                "Usuário",
+              email: storedUserData.email || "",
+              phone: storedUserData.phone || "",
+              avatar: savedAvatar || null,
+            });
+          } else {
+            throw new Error("Dados do usuário não encontrados.");
+          }
+        } catch (fallbackError) {
+          Alert.alert(
+            "Erro",
+            fallbackError.message || "Falha ao carregar os dados do usuário."
+          );
+          navigation.navigate("Login");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [navigation]);
+
+  // Função formatPhone movida para o escopo correto
+  const formatPhone = (phone) => {
+    if (!phone) return "";
+    const cleaned = phone.replace(/\D/g, "");
+    const match = cleaned.match(/^(\d{2})(\d{5})(\d{4})$/);
+    if (match) {
+      return `(${match[1]}) ${match[2]}-${match[3]}`;
+    }
+    return phone;
+  };
+
+  // Selecionar imagem da galeria
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permissão negada",
+        "É necessário permitir o acesso à galeria para selecionar uma foto."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      const newAvatar = result.assets[0].uri;
+      setUser((prevUser) => ({ ...prevUser, avatar: newAvatar }));
+      const avatarKey = `avatar_${user.email.replace(/[@.]/g, "_")}`;
+      await AsyncStorage.setItem(avatarKey, newAvatar);
+    }
+  };
 
   const handleEdit = (field) => {
     setEditingField(field);
@@ -40,10 +127,43 @@ const TelaPerfil = ({ navigation }) => {
     setEditModalVisible(true);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     setUser({ ...user, [editingField]: editValue });
     setEditModalVisible(false);
+    try {
+      const userData = await AuthService.getUserData();
+      await AsyncStorage.setItem(
+        "user_data",
+        JSON.stringify({
+          ...userData,
+          [editingField]: editValue,
+        })
+      );
+    } catch (error) {
+      console.error("Erro ao atualizar user_data:", error);
+    }
   };
+
+  const handleLogout = async () => {
+    try {
+      await AuthService.logout();
+      Alert.alert("Sucesso", "Você foi deslogado com sucesso.");
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    } catch (error) {
+      Alert.alert("Erro", error.message || "Falha ao realizar logout.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Text style={styles.loadingText}>Carregando...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <ImageBackground
@@ -53,79 +173,37 @@ const TelaPerfil = ({ navigation }) => {
     >
       <SafeAreaView style={styles.safeArea}>
         <StatusBar backgroundColor="#1976D2" barStyle="light-content" />
-
-        {/* Header */}
-        <View style={styles.header}>
-          {/*} <TouchableOpacity onPress={() => navigation.goBack()}>
-            <MaterialIcons name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>*/}
-          <Text style={styles.headerTitle}>Meu Perfil</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          {/* Seção do Avatar */}
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: user.avatar }} style={styles.avatar} />
-            <TouchableOpacity style={styles.editAvatarButton}>
-              {/*<MaterialIcons name="edit" size={18} color="#6200EE" />*/}
+            <Image
+              source={user.avatar ? { uri: user.avatar } : DEFAULT_AVATAR}
+              style={styles.avatar}
+            />
+            <TouchableOpacity
+              style={styles.editAvatarButton}
+              onPress={pickImage}
+            >
+              <MaterialIcons name="edit" size={18} color="#6200EE" />
             </TouchableOpacity>
             <Text style={styles.userName}>{user.name}</Text>
             <Text style={styles.userPosition}>{user.position}</Text>
           </View>
-          {/* Informações Pessoais */}
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Informações Pessoais</Text>
-
             <View style={styles.infoCard}>
-              <InfoItem
-                icon="person"
-                label="Nome Completo"
-                value={user.name}
-                /*onPress={() => handleEdit("name")}*/
-              />
-              <InfoItem
-                icon="mail"
-                label="E-mail"
-                value={user.email}
-                /*onPress={() => handleEdit("email")}*/
-              />
+              <InfoItem icon="person" label="Nome Completo" value={user.name} />
+              <InfoItem icon="mail" label="E-mail" value={user.email} />
               <InfoItem
                 icon="phone"
                 label="Telefone"
-                value={user.phone}
-                /*onPress={() => handleEdit("phone")}*/
+                value={formatPhone(user.phone)}
               />
             </View>
           </View>
-          {/* Informações Profissionais */}
-          {/*} <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Informações Profissionais</Text>
 
-            <View style={styles.infoCard}>
-              <InfoItem
-                icon="work"
-                label="Cargo"
-                value={user.position}
-                onPress={() => handleEdit("position")}
-              />
-              <InfoItem
-                icon="business"
-                label="Departamento"
-                value={user.department}
-                onPress={() => handleEdit("department")}
-              />
-              <InfoItem
-                icon="badge"
-                label="Matrícula"
-                value={user.registration}
-              />
-            </View>
-          </View>*/}
-          {/* Configurações e Ações */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Configurações</Text>
-
             <View style={styles.infoCard}>
               <TouchableOpacity style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
@@ -134,32 +212,12 @@ const TelaPerfil = ({ navigation }) => {
                 </View>
                 <MaterialIcons name="chevron-right" size={24} color="#999" />
               </TouchableOpacity>
-
-              {/*<TouchableOpacity style={styles.menuItem}>
-                <View style={styles.menuItemLeft}>
-                  <MaterialCommunityIcons name="bell" size={22} color="#555" />
-                  <Text style={styles.menuItemText}>Notificações</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={24} color="#999" />
-              </TouchableOpacity>*/}
-
-              {/*<TouchableOpacity style={styles.menuItem}>
-                <View style={styles.menuItemLeft}>
-                  <MaterialIcons name="help" size={22} color="#555" />
-                  <Text style={styles.menuItemText}>Ajuda e Suporte</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={24} color="#999" />
-              </TouchableOpacity>*/}
             </View>
           </View>
 
-          <LogoutButton
-            onPress={() => console.log("Usuário deslogado")}
-            navigation={navigation}
-          />
+          <LogoutButton onPress={handleLogout} navigation={navigation} />
         </ScrollView>
 
-        {/* Modal de Edição */}
         <CustomModal
           visible={editModalVisible}
           onClose={() => setEditModalVisible(false)}
@@ -179,7 +237,6 @@ const TelaPerfil = ({ navigation }) => {
   );
 };
 
-// Componente auxiliar para itens de informação
 const InfoItem = ({ icon, label, value, onPress }) => (
   <TouchableOpacity style={styles.infoItem} onPress={onPress}>
     <MaterialIcons name={icon} size={22} color="#6200EE" />
@@ -199,7 +256,7 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    backgroundColor: "rgba(248, 248, 248, 0.8)", // Fundo semi-transparente,
+    backgroundColor: "rgba(248, 248, 248, 0.8)",
   },
   scrollContainer: {
     paddingBottom: 20,
@@ -256,7 +313,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#6200EE",
+    color: "rgba(33, 34, 33, 0.98)",
     marginBottom: 12,
     marginLeft: 8,
   },
@@ -305,25 +362,6 @@ const styles = StyleSheet.create({
     color: "#333",
     marginLeft: 16,
   },
-
-  modalContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  modalContent: {
-    width: "85%",
-    backgroundColor: "white",
-    borderRadius: 10,
-    padding: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 20,
-    color: "#333",
-  },
   input: {
     borderWidth: 1,
     borderColor: "#ddd",
@@ -332,25 +370,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 20,
   },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  modalButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    marginLeft: 10,
-  },
-  cancelButton: {
-    backgroundColor: "#f5f5f5",
-  },
-  saveButton: {
-    backgroundColor: "#6200EE",
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: "bold",
+  loadingText: {
+    fontSize: 18,
+    textAlign: "center",
+    marginTop: 50,
   },
 });
 
