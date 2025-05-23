@@ -26,9 +26,11 @@
         {
           "iCloudContainerEnvironment": "Production"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "ios": {
+      "newArchEnabled": true,
       "supportsTablet": true,
       "bundleIdentifier": "com.yourcompany.hcall",
       "infoPlist": {
@@ -40,6 +42,7 @@
       }
     },
     "android": {
+      "newArchEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

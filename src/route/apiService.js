@@ -1,11 +1,9 @@
-// src/services/apiService.js
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Configuração base do Axios
 const api = axios.create({
-  baseURL:
-    "https://chronicles-midi-ceremony-expectations.trycloudflare.com/api",
+  baseURL: "http://192.168.173.200:7070/api",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -47,6 +45,7 @@ api.interceptors.response.use(
 // Serviço de autenticação
 export const AuthService = {
   login: async (email, password) => {
+    console.log(api);
     try {
       const response = await api.post("/auth/enter", {
         email,
@@ -77,7 +76,7 @@ export const AuthService = {
   getUserProfile: async () => {
     try {
       const response = await api.get("/user");
-      const data = response.data;
+      const data = response.data.data.user;
       console.log("Resposta do endpoint /user:", data); // Log da resposta
       if (data) {
         await AsyncStorage.setItem(
@@ -127,24 +126,14 @@ export const AuthService = {
     }
   },
 
-  getUserProfile: async () => {
+  updateUserProfile: async (newPassword) => {
     try {
-      const response = await api.get("/user");
+      const response = await api.patch("/self/" + newPassword);
       const data = response.data;
-      if (data) {
-        // Atualiza o AsyncStorage com os dados mais recentes
-        await AsyncStorage.setItem(
-          "user_data",
-          JSON.stringify({
-            email: data.email,
-            name: data.name,
-            phone: data.phone || "",
-          })
-        );
-        await AsyncStorage.setItem("user_role", data.role);
+      if (data.status) {
         return data;
       } else {
-        throw new Error("Falha ao buscar dados do usuário.");
+        throw new Error(data.message || "Falha ao atualizar a senha.");
       }
     } catch (error) {
       throw new Error(error.message || "Erro ao conectar com o servidor.");

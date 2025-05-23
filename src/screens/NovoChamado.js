@@ -18,6 +18,7 @@ import Icon from "react-native-vector-icons/MaterialIcons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
+import * as ImageManipulator from "expo-image-manipulator";
 import FooterMenu from "../components/FooterMenu";
 import { TicketService, AuthService } from "../route/apiService";
 
@@ -29,10 +30,17 @@ const NovoChamado = ({ navigation }) => {
   const [departamento, setDepartamento] = useState("");
   const [referencia, setReferencia] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [anexo, setAnexo] = useState(null);
-  const [tipoAnexo, setTipoAnexo] = useState(null);
+  const [anexos, setAnexos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [userRole, setUserRole] = useState(null);
+  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
+  const [cameraPermission, requestCameraPermission] =
+    ImagePicker.useCameraPermissions();
+  const [mediaLibraryPermission, requestMediaLibraryPermission] =
+    ImagePicker.useMediaLibraryPermissions();
+
+  const MAX_ANEXOS = 5;
+  const MAX_FILE_SIZE_MB = 5;
 
   const equipamentos = [
     "NoteBook",
@@ -69,9 +77,14 @@ const NovoChamado = ({ navigation }) => {
 
   useEffect(() => {
     const fetchUserData = async () => {
+      setIsLoadingUserData(true);
       try {
         const role = await AuthService.getUserRole();
+        if (!role) {
+          throw new Error("Sessão expirada. Faça login novamente.");
+        }
         setUserRole(role);
+
         const userData = await AuthService.getUserData();
         if (userData && userData.name) {
           setRequisitor(userData.name);
@@ -79,43 +92,73 @@ const NovoChamado = ({ navigation }) => {
           throw new Error("Dados do usuário não encontrados.");
         }
       } catch (error) {
-        console.error("Erro ao buscar dados do usuário:", error);
+        console.error("Erro ao buscar dados do usuário:", error.message);
         Alert.alert(
-          "Erro",
-          "Não foi possível carregar os dados do usuário. Faça login novamente.",
-          [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+          "Erro de Autenticação",
+          error.message || "Sessão expirada. Faça login novamente.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                AuthService.logout();
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: "Login" }],
+                });
+              },
+            },
+          ]
         );
+      } finally {
+        setIsLoadingUserData(false);
       }
     };
     fetchUserData();
   }, [navigation]);
 
   const selecionarAnexo = async (tipo) => {
+    if (anexos.length >= MAX_ANEXOS) {
+      Alert.alert(
+        "Limite atingido",
+        `Você pode anexar no máximo ${MAX_ANEXOS} arquivos.`
+      );
+      return;
+    }
+
     try {
       let result;
 
       if (tipo === "camera") {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Permissão negada", "Permita o acesso à câmera.");
-          return;
+        if (!cameraPermission?.granted) {
+          const { status } = await requestCameraPermission();
+          if (status !== "granted") {
+            Alert.alert(
+              "Permissão negada",
+              "Permita o acesso à câmera para continuar."
+            );
+            return;
+          }
         }
         result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
+          mediaTypes: ["images"],
+          allowsEditing: false,
           aspect: [4, 3],
-          quality: 0.8, // Reduzir qualidade para diminuir tamanho
+          quality: 0.8,
         });
       } else if (tipo === "galeria") {
-        const { status } =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Permissão negada", "Permita o acesso à galeria.");
-          return;
+        if (!mediaLibraryPermission?.granted) {
+          const { status } = await requestMediaLibraryPermission();
+          if (status !== "granted") {
+            Alert.alert(
+              "Permissão negada",
+              "Permita o acesso à galeria para continuar."
+            );
+            return;
+          }
         }
         result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
+          mediaTypes: ["images"],
+          allowsEditing: false,
           aspect: [4, 3],
           quality: 0.8,
         });
@@ -133,63 +176,121 @@ const NovoChamado = ({ navigation }) => {
       }
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAnexo(result.assets[0].uri);
-        setTipoAnexo(tipo === "arquivo" ? "file" : "image");
+        let uri = result.assets[0].uri;
+        let tipoAnexo = tipo === "arquivo" ? "file" : "image";
+
+        if (tipoAnexo === "image") {
+          const manipResult = await ImageManipulator.manipulateAsync(
+            uri,
+            [{ resize: { width: 600 } }],
+            { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          uri = manipResult.uri;
+        }
+
+        const fileInfo = await FileSystem.getInfoAsync(uri);
+        const fileSizeMB = fileInfo.size / (1024 * 1024);
+        if (fileSizeMB > MAX_FILE_SIZE_MB) {
+          Alert.alert(
+            "Erro",
+            `O arquivo excede o tamanho máximo de ${MAX_FILE_SIZE_MB}MB.`
+          );
+          return;
+        }
+
+        setAnexos([...anexos, { uri, tipo: tipoAnexo }]);
       }
     } catch (error) {
-      console.error("Erro ao selecionar anexo:", error);
-      Alert.alert(
-        "Erro",
-        "Erro ao selecionar o arquivo. Por favor, selecione um tipo válido (PDF, DOC, XLS, ou imagem)."
-      );
+      console.error("Erro ao selecionar anexo:", error.message, error.stack);
+      Alert.alert("Erro", "Falha ao processar o anexo. Tente novamente.");
     }
+  };
+
+  const removerAnexo = (index) => {
+    setAnexos(anexos.filter((_, i) => i !== index));
   };
 
   const renderAnexo = () => {
-    if (!anexo) return null;
+    if (anexos.length === 0) return null;
 
-    if (tipoAnexo === "image") {
-      return <Image source={{ uri: anexo }} style={styles.anexoPreview} />;
-    } else {
-      const fileName = anexo.split("/").pop();
-      return (
-        <View style={styles.arquivoContainer}>
-          <Icon name="insert-drive-file" size={40} color="#007AFF" />
-          <Text
-            style={styles.arquivoNome}
-            numberOfLines={1}
-            ellipsizeMode="middle"
-          >
-            {fileName.length > 20
-              ? `${fileName.substring(0, 10)}...${fileName.substring(
-                  fileName.length - 7
-                )}`
-              : fileName}
-          </Text>
-        </View>
-      );
-    }
+    return (
+      <View style={styles.anexosContainer}>
+        {anexos.map((anexo, index) => (
+          <View key={index} style={styles.anexoItem}>
+            {anexo.tipo === "image" ? (
+              <Image source={{ uri: anexo.uri }} style={styles.anexoPreview} />
+            ) : (
+              <View style={styles.arquivoContainer}>
+                <Icon name="insert-drive-file" size={40} color="#007AFF" />
+                <Text
+                  style={styles.arquivoNome}
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
+                  {anexo.uri.split("/").pop().length > 20
+                    ? `${anexo.uri
+                        .split("/")
+                        .pop()
+                        .substring(0, 10)}...${anexo.uri
+                        .split("/")
+                        .pop()
+                        .substring(anexo.uri.split("/").pop().length - 7)}`
+                    : anexo.uri.split("/").pop()}
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.removerButton}
+              onPress={() => removerAnexo(index)}
+            >
+              <Icon name="close" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
+    );
   };
 
-  const convertImageToBase64 = async (uri) => {
+  const convertFileToBase64 = async (uri, tipo) => {
     try {
       const fileInfo = await FileSystem.getInfoAsync(uri);
       const fileSizeMB = fileInfo.size / (1024 * 1024);
-      if (fileSizeMB > 5) {
-        throw new Error("A imagem excede o tamanho máximo de 5MB.");
+      if (fileSizeMB > MAX_FILE_SIZE_MB) {
+        throw new Error(
+          `O arquivo excede o tamanho máximo de ${MAX_FILE_SIZE_MB}MB.`
+        );
       }
 
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      const fileName = uri.split("/").pop();
-      const imageType = fileName.toLowerCase().endsWith(".png")
-        ? "image/png"
-        : "image/jpeg";
-      return `data:${imageType};base64,${base64}`; // Adiciona prefixo
+      const fileName = uri.split("/").pop().toLowerCase();
+      let mimeType;
+
+      if (tipo === "image") {
+        mimeType = fileName.endsWith(".png") ? "image/png" : "image/jpeg";
+      } else {
+        if (fileName.endsWith(".pdf")) mimeType = "application/pdf";
+        else if (fileName.endsWith(".doc")) mimeType = "application/msword";
+        else if (fileName.endsWith(".docx"))
+          mimeType =
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        else if (fileName.endsWith(".xls"))
+          mimeType = "application/vnd.ms-excel";
+        else if (fileName.endsWith(".xlsx"))
+          mimeType =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        else throw new Error("Tipo de arquivo não suportado.");
+      }
+
+      return {
+        name: fileName,
+        content: `data:${mimeType};base64,${base64}`,
+        ...(tipo === "image" ? { type: mimeType } : { file_type: mimeType }),
+      };
     } catch (error) {
-      console.error("Erro ao converter imagem para base64:", error);
-      throw new Error(error.message || "Falha ao converter a imagem.");
+      console.error("Erro ao converter arquivo para base64:", error.message);
+      throw error;
     }
   };
 
@@ -225,36 +326,43 @@ const NovoChamado = ({ navigation }) => {
     try {
       let ticketData = {
         name: requisitor,
-        item: equipamento,
-        department: departamento,
-        reference: referencia || "Sem referência",
         explain: descricao,
+        item: equipamento,
+        reference: referencia || "Sem referência",
+        department: departamento,
+        images: [],
+        attachments: [],
       };
 
-      if (anexo && tipoAnexo === "image") {
-        const base64Image = await convertImageToBase64(anexo);
-        ticketData.image = base64Image; // Ajustado para enviar como string base64
-      } else if (anexo && tipoAnexo === "file") {
-        Alert.alert(
-          "Aviso",
-          "A API não suporta anexos de arquivos (PDF, DOC, XLS). Apenas imagens são permitidas."
-        );
-        setLoading(false);
-        return;
+      if (anexos.length > 0) {
+        for (const anexo of anexos) {
+          const convertedFile = await convertFileToBase64(
+            anexo.uri,
+            anexo.tipo
+          );
+          if (anexo.tipo === "image") {
+            ticketData.images.push({
+              name: convertedFile.name,
+              content: convertedFile.content,
+              type: convertedFile.type,
+            });
+          } else {
+            ticketData.attachments.push({
+              name: convertedFile.name,
+              content: convertedFile.content,
+              file_type: convertedFile.file_type,
+            });
+          }
+        }
       }
-
-      console.log(
-        "Dados enviados para a API:",
-        JSON.stringify(ticketData, null, 2)
-      );
 
       await TicketService.createTicket(ticketData);
 
       Alert.alert("Sucesso", "Chamado criado com sucesso!", [
-        { text: "OK", onPress: () => navigation.navigate("StatusChamado") }, // Alterado para navegar para StatusChamado
+        { text: "OK", onPress: () => navigation.navigate("StatusChamado") },
       ]);
     } catch (error) {
-      console.error("Erro ao criar o ticket:", error);
+      console.error("Erro ao criar o ticket:", error.message);
       Alert.alert(
         "Erro",
         error.message ||
@@ -264,6 +372,18 @@ const NovoChamado = ({ navigation }) => {
       setLoading(false);
     }
   };
+
+  if (isLoadingUserData) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator
+          size="large"
+          color="#007AFF"
+          style={styles.loading}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <ImageBackground
@@ -316,47 +436,45 @@ const NovoChamado = ({ navigation }) => {
               </Picker>
             </View>
 
-            <Text style={styles.label}>Referência:</Text>
+            <Text style={styles.label}>Referência (Opcional):</Text>
             <TextInput
               style={styles.input}
               value={referencia}
               onChangeText={setReferencia}
-              placeholder="Número de patrimônio ou identificação"
+              placeholder="Referência do chamado"
             />
 
-            <Text style={styles.label}>Descrição do Chamado:</Text>
+            <Text style={styles.label}>Descrição:</Text>
             <TextInput
-              style={[styles.input, styles.descricaoInput]}
+              style={[styles.input, styles.textArea]}
               value={descricao}
               onChangeText={setDescricao}
-              placeholder="Descreva o problema detalhadamente"
+              placeholder="Descreva o problema"
               multiline
               numberOfLines={4}
             />
 
-            <Text style={styles.label}>Anexo:</Text>
-            <View style={styles.anexoButtonsContainer}>
+            <Text style={styles.label}>Anexos (máximo {MAX_ANEXOS}):</Text>
+            <View style={styles.anexoButtons}>
               <TouchableOpacity
                 style={styles.anexoButton}
                 onPress={() => selecionarAnexo("camera")}
               >
-                <Icon name="photo-camera" size={24} color="#007AFF" />
+                <Icon name="camera-alt" size={24} color="#fff" />
                 <Text style={styles.anexoButtonText}>Câmera</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.anexoButton}
                 onPress={() => selecionarAnexo("galeria")}
               >
-                <Icon name="photo-library" size={24} color="#007AFF" />
+                <Icon name="photo-library" size={24} color="#fff" />
                 <Text style={styles.anexoButtonText}>Galeria</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.anexoButton}
                 onPress={() => selecionarAnexo("arquivo")}
               >
-                <Icon name="attach-file" size={24} color="#007AFF" />
+                <Icon name="attach-file" size={24} color="#fff" />
                 <Text style={styles.anexoButtonText}>Arquivo</Text>
               </TouchableOpacity>
             </View>
@@ -365,8 +483,8 @@ const NovoChamado = ({ navigation }) => {
 
             <TouchableOpacity
               style={[
-                styles.enviarButton,
-                loading && styles.enviarButtonDisabled,
+                styles.submitButton,
+                loading && styles.submitButtonDisabled,
               ]}
               onPress={enviarChamado}
               disabled={loading}
@@ -374,7 +492,7 @@ const NovoChamado = ({ navigation }) => {
               {loading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.enviarText}>ENVIAR CHAMADO</Text>
+                <Text style={styles.submitButtonText}>Enviar Chamado</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -386,116 +504,134 @@ const NovoChamado = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
+  },
   backgroundImage: {
     flex: 1,
     width: "100%",
     height: "100%",
-  },
-  container: {
-    flex: 1,
   },
   scrollView: {
     flex: 1,
   },
   scrollContainer: {
     flexGrow: 1,
+    paddingBottom: 100,
   },
   contentContainer: {
-    backgroundColor: "rgba(245, 245, 245, 0.9)",
-    borderRadius: 10,
     padding: 20,
-    margin: 10,
   },
   titulo: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: "bold",
+    color: "#fff",
     marginBottom: 20,
     textAlign: "center",
-    color: "#333",
   },
   label: {
     fontSize: 16,
-    marginBottom: 8,
-    color: "#555",
-    fontWeight: "500",
+    color: "#000000",
+    marginBottom: 5,
   },
   input: {
     backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 5,
-    padding: 12,
-    marginBottom: 15,
+    borderRadius: 8,
+    padding: 10,
     fontSize: 16,
+    marginBottom: 15,
   },
-  descricaoInput: {
+  textArea: {
     height: 100,
     textAlignVertical: "top",
   },
   pickerContainer: {
     backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 5,
+    borderRadius: 8,
     marginBottom: 15,
-    overflow: "hidden",
   },
-  anexoButtonsContainer: {
+  anexoButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 15,
   },
   anexoButton: {
     flex: 1,
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 5,
+    backgroundColor: "#007AFF",
+    borderRadius: 8,
     padding: 10,
+    alignItems: "center",
     marginHorizontal: 5,
+    flexDirection: "row",
+    justifyContent: "center",
   },
   anexoButtonText: {
-    color: "#007AFF",
-    marginTop: 5,
-    fontSize: 12,
+    color: "#fff",
+    fontSize: 16,
+    marginLeft: 5,
+  },
+  anexosContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 15,
+  },
+  anexoItem: {
+    width: 100,
+    height: 100,
+    marginRight: 10,
+    marginBottom: 10,
+    position: "relative",
   },
   anexoPreview: {
-    width: "100%",
-    height: 200,
-    resizeMode: "contain",
-    marginBottom: 15,
-    backgroundColor: "#eee",
-    borderRadius: 5,
+    width: 100,
+    height: 100,
+    borderRadius: 8,
   },
   arquivoContainer: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 5,
-    padding: 15,
+    width: 100,
+    height: 100,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 15,
+    padding: 5,
   },
   arquivoNome: {
-    marginTop: 10,
-    color: "#555",
-    fontSize: 14,
+    fontSize: 12,
+    color: "#333",
+    textAlign: "center",
+    marginTop: 5,
   },
-  enviarButton: {
+  removerButton: {
+    position: "absolute",
+    top: -10,
+    right: -10,
+    backgroundColor: "#FF3B30",
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  submitButton: {
     backgroundColor: "#007AFF",
-    borderRadius: 5,
+    borderRadius: 8,
     padding: 15,
     alignItems: "center",
-    marginTop: 10,
   },
-  enviarButtonDisabled: {
-    backgroundColor: "#99C9FF",
+  submitButtonDisabled: {
+    backgroundColor: "#aaa",
   },
-  enviarText: {
+  submitButtonText: {
     color: "#fff",
+    fontSize: 18,
     fontWeight: "bold",
-    fontSize: 16,
+  },
+  loading: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 
