@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Configuração base do Axios
 const api = axios.create({
-  baseURL: "http://192.168.173.200:7070/api",
+  baseURL: "https://french-pix-instances-thou.trycloudflare.com/api",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -176,9 +176,14 @@ export const TicketService = {
     }
   },
 
-  createTicket: async (ticketData) => {
+  createTicket: async (formData) => {
     try {
-      const response = await api.post("/ticket/", ticketData);
+      const response = await api.post("/ticket/", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
       const data = response.data;
       if (data.status) {
         return data;

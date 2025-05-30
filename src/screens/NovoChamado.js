@@ -198,7 +198,11 @@ const NovoChamado = ({ navigation }) => {
           return;
         }
 
-        setAnexos([...anexos, { uri, tipo: tipoAnexo }]);
+        let nomeArquivo = result.assets[0].fileName;
+        if (!nomeArquivo) {
+          nomeArquivo = uri.split("/").pop(); // extrai o nome a partir da URI
+        }
+        setAnexos([...anexos, { uri, nome: nomeArquivo, tipo: tipoAnexo }]);
       }
     } catch (error) {
       console.error("Erro ao selecionar anexo:", error.message, error.stack);
@@ -307,6 +311,7 @@ const NovoChamado = ({ navigation }) => {
       );
       return;
     }
+
     if (userRole === "admin") {
       Alert.alert(
         "Erro",
@@ -314,6 +319,7 @@ const NovoChamado = ({ navigation }) => {
       );
       return;
     }
+
     if (userRole !== "user" && userRole !== "master") {
       Alert.alert(
         "Erro",
@@ -324,50 +330,49 @@ const NovoChamado = ({ navigation }) => {
 
     setLoading(true);
     try {
-      let ticketData = {
-        name: requisitor,
-        explain: descricao,
-        item: equipamento,
-        reference: referencia || "Sem referência",
-        department: departamento,
-        images: [],
-        attachments: [],
-      };
+      const formData = new FormData();
+      formData.append("name", requisitor);
+      formData.append("explain", descricao);
+      formData.append("item", equipamento);
+      formData.append("reference", referencia || "Sem referência");
+      formData.append("department", departamento);
 
-      if (anexos.length > 0) {
-        for (const anexo of anexos) {
-          const convertedFile = await convertFileToBase64(
-            anexo.uri,
-            anexo.tipo
+      for (let index = 0; index < anexos.length; index++) {
+        const anexo = anexos[index];
+
+        if (anexo.tipo === "image") {
+          // Converter imagem para base64
+          const base64Data = await FileSystem.readAsStringAsync(anexo.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          // Enviar como JSON no campo "images[]"
+          formData.append(
+            "images",
+            JSON.stringify({
+              name: anexo.nome || `imagem${index}.jpg`,
+              content: base64Data,
+              type: anexo.mime || "image/jpeg",
+            })
           );
-          if (anexo.tipo === "image") {
-            ticketData.images.push({
-              name: convertedFile.name,
-              content: convertedFile.content,
-              type: convertedFile.type,
-            });
-          } else {
-            ticketData.attachments.push({
-              name: convertedFile.name,
-              content: convertedFile.content,
-              file_type: convertedFile.file_type,
-            });
-          }
+        } else {
+          // Enviar arquivo binário no campo "attachments[]"
+          formData.append("attachments", {
+            uri: anexo.uri,
+            type: anexo.mime || "application/octet-stream",
+            name: anexo.nome || `arquivo${index}`,
+          });
         }
       }
 
-      await TicketService.createTicket(ticketData);
+      await TicketService.createTicket(formData);
 
       Alert.alert("Sucesso", "Chamado criado com sucesso!", [
         { text: "OK", onPress: () => navigation.navigate("StatusChamado") },
       ]);
     } catch (error) {
       console.error("Erro ao criar o ticket:", error.message);
-      Alert.alert(
-        "Erro",
-        error.message ||
-          "Falha ao criar o ticket. Verifique os dados e tente novamente."
-      );
+      Alert.alert("Erro", error.message || "Falha ao criar o ticket.");
     } finally {
       setLoading(false);
     }
