@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Configuração base do Axios
 const api = axios.create({
-  baseURL: "https://french-pix-instances-thou.trycloudflare.com/api",
+  baseURL: "http://191.252.182.22:2020/api",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -53,6 +53,7 @@ export const AuthService = {
       });
 
       const data = response.data;
+      console.log("Resposta do login:", data);
       if (data.status) {
         await AsyncStorage.setItem("jwt_token", data.data.token);
         await AsyncStorage.setItem("user_role", data.data.user.role);
@@ -69,6 +70,7 @@ export const AuthService = {
         throw new Error(data.message || "Erro ao realizar login.");
       }
     } catch (error) {
+      console.log(data);
       throw new Error(error.message || "Falha na comunicação com o servidor.");
     }
   },
